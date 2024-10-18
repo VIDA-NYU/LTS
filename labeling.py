@@ -31,8 +31,8 @@ class Labeling:
 
     def set_model(self):
         if self.label_model == "llama":
-            self.model = AutoModelForCausalLM.from_pretrained("/scratch/jsb742/model").to(self.device)
-            self.tokenizer = AutoTokenizer.from_pretrained("/scratch/jsb742/model")
+            self.model = AutoModelForCausalLM.from_pretrained("xxx").to(self.device)
+            self.tokenizer = AutoTokenizer.from_pretrained("xxx")
             print("model Loaded")
         elif self.label_model == "gpt":
             raise NotImplementedError()

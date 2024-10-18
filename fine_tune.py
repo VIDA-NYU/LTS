@@ -120,7 +120,7 @@ class Labeling:
             self.prompt_llama = self.generate_llama_prompt()
             print("model Loaded")
         elif self.label_model == "gpt":
-            self.model = OpenAI(api_key="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")
+            self.model = OpenAI(api_key="xxxxxx")
         elif self.label_model =="file":
             self.model = None
 
