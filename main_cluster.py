@@ -5,11 +5,15 @@ from labeling import Labeling
 from random_sampling import RandomSampler
 from multimodel import MultiModel
 from preprocessing import TextPreprocessor
+# from text_embedding import BertTextEmbedder
+# from text_cluster import TextClusterer
 from fine_tune import BertFineTuner
 from thompson_sampling import ThompsonSampler
+from transformers import BertForSequenceClassification
 import nltk
 import json
-
+import logging
+# nltk.data.path.append("/Users/julesbarbosa/nltk_data")
 nltk.download('punkt')
 
 import os
@@ -39,6 +43,10 @@ def main():
                         help="The type of model to be finetune")
     parser.add_argument('-metric', type=str, required=False,
                         help="The type of metric to be used for baseline")
+    parser.add_argument('-val_path', type=str, required=False,
+                        help="path to validation")
+    parser.add_argument('-cluster_size', type=str, required=False,
+                        help="path to validation")
 
 
     args = parser.parse_args()
@@ -54,25 +62,50 @@ def main():
     filename = args.filename
     model = args.model
     metric = args.metric
+    validation_path = args.val_path
+    cluster_size = args.cluster_size
 
 
     preprocessor = TextPreprocessor()
 
 
-    validation = pd.read_csv("validation_sharks_df.csv")
-    validation = preprocessor.preprocess_df(validation)
-    validation["training_text"] = validation["clean_title"]
-    validation.to_csv("validation_sharks_df.csv", index=False)
+    validation = pd.read_csv(validation_path)
+    # validation = preprocessor.preprocess_df(validation)
+    validation["training_text"] = validation["text"]
+    # validation.to_csv("validation_sharks_df.csv", index=False)
 
+
+    # if cluster:
+    #     # create embeddings
+    #     data = preprocessor.preprocess_df(data)
+    #     embedder = BertTextEmbedder()
+    #     embeddings = embedder.get_bert_embeddings(data['clean_title'].to_list())
+    #     df = pd.DataFrame(embeddings)
+    #     df = pd.concat([data[["id"]], df], axis=1)
+    #     df.to_csv("./data/gpt_training_umap.csv", index=False)
+    #     ## Cluster Text with HDBSCAN
+    #     embeddings = df.iloc[:, 1:].values
+    #     clusterer = TextClusterer(min_cluster_size=20)
+
+    #     cluster_labels = clusterer.fit_predict(embeddings)
+
+    #     data['label_cluster'] = cluster_labels
+    #     # else:
+    #     #     umap_df = pd.read_csv("data/gpt_training_with_clusters.csv")
+
+    #     n_cluster = data['label_cluster'].value_counts().count()
+
+    # else:
     try:
         data = pd.read_csv(filename+"_lda.csv")
         n_cluster = data['label_cluster'].value_counts().count()
         print("using data saved on disk")
+        # print(sample.head(1))
     except Exception:
         print("Creating LDA")
         data = pd.read_csv(filename+".csv")
         data = preprocessor.preprocess_df(data)
-        lda_topic_model = LDATopicModel(num_topics=3)
+        lda_topic_model = LDATopicModel(num_topics=cluster_size)
         topics = lda_topic_model.fit_transform(data['clean_title'].to_list())
         data["label_cluster"] = topics
         n_cluster = data['label_cluster'].value_counts().count()
@@ -121,7 +154,7 @@ def main():
         else:
             df = sample_data
         print(df["label"].value_counts())
-        print(df["answer"].value_counts())
+        # print(df["answer"].value_counts())
 
         # ADD POSITIVE DATA IF AVAILABLE
 
@@ -175,14 +208,20 @@ def main():
             model_name = f"models/fine_tunned_{i}_bandit_{chosen_bandit}"
             trainer.update_model(model_name, results[f"eval_{metric}"], save_model=True)
             # df.to_csv("llama_training_data.csv", index=False)
-            if os.path.exists(f'training_data_{filename}.csv'):
-                train_data = pd.read_csv(f'training_data_{filename}.csv')
+            if os.path.exists(f'{filename}_training_data.csv'):
+                train_data = pd.read_csv(f'{filename}_training_data.csv')
                 df = pd.concat([train_data, df])
-            df.to_csv(f'training_data_{filename}.csv', index=False)
+            df.to_csv(f'{filename}_training_data.csv', index=False)
             if os.path.exists('positive_data.csv'):
                 os.remove('positive_data.csv')
             if filter_label:
                 trainer.set_clf(True)
+                # data["predicted_label"] = trainer.get_inference(data)
+                # print(data["predicted_label"].value_counts())
+                # if data[data["predicted_label"]==1].empty:
+                #     data["predicted_label"] = 1
+                # data.to_csv("data_w_predictions.csv", index=False)
+            ## save model results
         else:
             #back to initial model
             trainer.update_model(model_name, baseline, save_model=False)
@@ -195,8 +234,8 @@ def main():
             df[df["label"]==1].to_csv("positive_data.csv", index=False)
 
 
-        if os.path.exists(f'model_results_{filename}.json'):
-            with open(f'model_results_{filename}.json', 'r') as file:
+        if os.path.exists(f'{filename}_model_results.json'):
+            with open(f'{filename}_model_results.json', 'r') as file:
                 existing_results = json.load(file)
         else:
             existing_results = {}
@@ -207,7 +246,7 @@ def main():
             existing_results[str(chosen_bandit)] = [results]
 
         # Write the updated list to the file
-        with open(f'model_results_{filename}.json', 'w') as file:
+        with open(f'{filename}_model_results.json', 'w') as file:
             json.dump(existing_results, file, indent=4)
         if sampling == "thompson":
             sampler.update(chosen_bandit, reward_difference)
@@ -216,6 +255,10 @@ def main():
     print("Bendt with highest expected improvement:", np.argmax(sampler.wins / (sampler.wins + sampler.losses)))
     print(sampler.wins)
     print(sampler.losses)
+    # Save the DataFrame with cluster labels
+    # umap_df.to_csv("./data/gpt_training_with_clusters.csv", index=False)
+
+
 
 
 if __name__ == "__main__":

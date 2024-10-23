@@ -41,6 +41,47 @@ class ThompsonSampler:
         np.savetxt('wins.txt', self.wins)
         np.savetxt('losses.txt', self.losses)
 
+    # def get_sample_data(self, df, sample_size, filter_label: bool, trainer: Any):
+    #     def select_data(df, chosen_bandit, sample_size):
+    #         filtered_df = df[df['label_cluster'] == chosen_bandit].sample(min(sample_size, len(df[df['label_cluster'] == chosen_bandit])))
+    #         return filtered_df
+
+
+    #     #remove already used data
+    #     df = df[~df['id'].isin(self.selected_ids)]
+
+    #     if filter_label:
+    #         if "predicted_label" in df.columns:
+    #             pos = df[df["predicted_label"] == 1]
+    #             neg = df[df["predicted_label"] == 0]
+
+    #             data = pd.DataFrame()
+
+    #             while data.empty:
+    #                 n_sample = sample_size/2
+    #                 chosen_bandit = self.choose_bandit()
+    #                 print(f"Chosen bandit {chosen_bandit}")
+    #                 data = select_data(pos, chosen_bandit, int(n_sample))
+
+    #             neg_data = select_data(neg, chosen_bandit, int(sample_size-len(data)))
+    #             data = pd.concat([data, neg_data]).sample(frac=1)
+    #         else:
+    #             chosen_bandit = self.choose_bandit()
+    #             print(f"Chosen bandit {chosen_bandit}")
+    #             data = select_data(df, chosen_bandit, sample_size)
+    #     else:
+    #         chosen_bandit = self.choose_bandit()
+    #         print(f"Chosen bandit {chosen_bandit}")
+    #         data= select_data(df, chosen_bandit, sample_size)
+
+    #     # Add the IDs of sampled data to the selected_ids set
+    #     self.selected_ids.update(data['id'])
+    #     with open('selected_ids.txt', 'w') as f:
+    #         f.write('\n'.join(self.selected_ids))
+
+    #     return data, chosen_bandit
+
+
 
     def get_sample_data(self, df, sample_size, filter_label: bool, trainer: Any):
         def select_data(df, chosen_bandit, sample_size):

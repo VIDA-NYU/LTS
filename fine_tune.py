@@ -1,213 +1,255 @@
-import pandas as pd
-import json
-import re
-from pprint import pprint
-
-import torch
+from typing import Any, Optional, Dict, Union, Tuple, Callable, List
+# import tensorflow as tf
+from transformers import Trainer, TrainingArguments, BertTokenizer
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from datasets import Dataset, DatasetDict
-
-from peft import LoraConfig, PeftModel
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-)
-import openai
-from openai import OpenAI
-import os
+from transformers import Trainer, PreTrainedTokenizerBase, TrainingArguments, DataCollatorWithPadding, AutoTokenizer, BertForSequenceClassification, DataCollator, PreTrainedModel, default_data_collator
+from torch.utils.data import DataLoader
+import torch
+from torch.utils.data import IterableDataset
 import pandas as pd
+from torch import nn
 
-
-class Labeling:
-    def __init__(self, label_model= "llama"):
-        self.label_model = label_model
+class BertFineTuner:
+    def __init__(self, model_name: Optional[str], training_data: Optional[pd.DataFrame], test_data: Optional[pd.DataFrame],weight_decay: Optional[None], learning_rate=2e-5, dropout=0.2):
+        self.base_model = model_name
+        self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
-
-    def generate_prompt(self, title):
-        if self.label_model == "llama":
-            return self.generate_prompt_llama(title)
-        elif self.label_model=="gpt":
-            return self.generate_prompt_gpt(title)
+        self.last_model_acc: Dict[str, str] = None
+        self.training_data = training_data
+        self.test_data = test_data
+        self.trainer = None
+        self.run_clf = False
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        if dropout:
+            model = BertForSequenceClassification.from_pretrained(model_name, num_labels=2)
+            model.config.hidden_dropout_prob = dropout
+            self.model = model
         else:
-            return None
+            self.model = BertForSequenceClassification.from_pretrained(model_name, num_labels=2)
+        self.model.to(self.device)
 
 
-    def generate_prompt_llama(self, title: str) -> str:
-        return f"""### Instruction: {self.prompt_llama}
-                ### Input:
-                {title.strip()}
-                """
+    def set_clf(self, set: bool):
+        self.run_clf = set
 
-    def generate_prompt_gpt(self, title):
-        return f'''You are labeling tool to create labels for a classification task .
-                             I will provide text data from an advertisement of a product.
-                             The product should be classified in two labels:
-                             Label 1: relevant animal - if the product is from any of those 3 animals: Shark, Ray or Chimaeras. It should be from a real animal. Not an image or plastic for example.
-                             Label 2: not a relevant animal - if the product is from any other animal that is not Shark, Ray, or Chimaeras, or if the product is 100% synthetic (vegan).
-                             For products such as teeth, if it's mentioned that is only one tooth, you can label it as not a relevant animal. I am only interested in more than one tooth. Also if mentions it's a fossil, we are not interested. you can label it as not a relevant animal.
-                             Return only one of the two labels: relevant animal or not a relevant animal, no explanation is necessary.
-                             Exemple:
-                             1. Advertisement: Great White Shark Embroidered Patch Iron on Patch For Clothes
-                             Label: not a relevant animal
+    def get_clf(self):
+        return self.run_clf
 
-                             The product in example 1 is a piece of clothing with an animal embroidered. The product is not MADE by any animal product.
+    def get_last_model_acc(self):
+        return self.last_model_acc
 
-                             2. Advertisement: (sj480-50) 6" White Tip Reef SHARK jaw love sharks jaws teeth Triaenodon obesus
-                             Label: relevant animal
+    def set_train_data(self, train):
+        self.training_data = train
 
-                             The product in example 2 is selling a shark jaw. 100% animal product in this case.
+    def get_train_data(self):
+        return self.training_data
 
-                             3. Advertisement: Wholesale Group - 20 Perfect 5/8" Modern Tiger Shark Teeth
-                             Label: relevant animal
+    def get_base_model(self):
+        return self.base_model
 
-                             In example 3 we have a set of 20 teeth. In this case is True.
+    def create_dataset(self, train, test):
+        def tokenize_function(element):
+            return self.tokenizer(element['title'], padding="max_length", truncation=True, max_length=512)
 
-                             4. Advertisement: Mario Buccellati, a Rare and Exceptional Italian Silver Goat For Sale at 1stDibs
-                             Label: not a relevant animal
+        dataset_train = Dataset.from_pandas(train[["title", "label"]])
+        dataset_val = Dataset.from_pandas(test[["title", "label"]])
 
-                             This example 4 is also not an animal product. The goat in the ad is made out of silver and it's not the animal we are interested.
+        dataset = DatasetDict()
+        dataset["train"] = dataset_train
+        dataset["val"] = dataset_val
 
-                             5. Advertisement: HUGE SHARK TOOTH FOSSIL 3&1/4" GREAT Serrations Upper Principal
-                             Label: not a relevant animal
+        tokenized_data = dataset.map(tokenize_function, batched=True)
+        data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
 
-                             This is a product from a shark, but is not an animal product because it's only one tooth and it's a fossil.
+        return tokenized_data, data_collator
 
-                             6. Advertisement: {title}
-                             Label:
+    def create_test_dataset(self, df: pd.DataFrame) -> Dataset:
+        def tokenize_function(element):
+            return self.tokenizer(element['title'], padding="max_length", truncation=True, max_length=512)
 
-                             '''
+        test_dataset = Dataset.from_pandas(df[["title"]])
 
-    def generate_llama_prompt(self):
-        f'''You are labeling tool to create labels for a classification task .
-                             I will provide text data from an advertisement of a product.
-                             The product should be classified in two labels:
-                             relevant animal - if the product is from any of those 3 animals: Shark, Ray or Chimaeras. It should be from a real animal. Not an image or plastic for example.
-                             not a relevant animal - if the product is from any other animal that is not Shark, Ray, or Chimaeras, or if the product is 100% synthetic (vegan).
-                             For products such as teeth, if it's mentioned that is only one tooth, you can label it as not a relevant animal. I am only interested in more than one tooth. Also if mentions it's a fossil, we are not interested. you can label it as not a relevant animal.
-                             Return only one of the two labels, no explanation is necessary.
-                             Exemple:
-                             1. Advertisement: Great White Shark Embroidered Patch Iron on Patch For Clothes
-                             Label: not a relevant animal
+        dataset = DatasetDict()
+        dataset["test"] = test_dataset
 
-                             The product in example 1 is a piece of clothing with an animal embroidered. The product is not MADE by any animal product.
+        tokenized_data = dataset.map(tokenize_function, batched=True)
 
-                             2. Advertisement: (sj480-50) 6" White Tip Reef SHARK jaw love sharks jaws teeth Triaenodon obesus
-                             Label: relevant animal
+        return tokenized_data
 
-                             The product in example 2 is selling a shark jaw. 100% animal product in this case.
+    def compute_metrics(pred):
+        labels = pred.label_ids
+        preds = pred.predictions.argmax(-1)
 
-                             3. Advertisement: Wholesale Group - 20 Perfect 5/8" Modern Tiger Shark Teeth
-                             Label: relevant animal
+        accuracy = accuracy_score(labels, preds)
 
-                             In example 3 we have a set of 20 teeth. In this case is True.
+        precision = precision_score(labels, preds, average='weighted')
+        recall = recall_score(labels, preds, average='weighted')
+        f1 = f1_score(labels, preds, average='weighted')
 
-                             4. Advertisement: Mario Buccellati, a Rare and Exceptional Italian Silver Goat For Sale at 1stDibs
-                             Label: not a relevant animal
+        return {
+            'accuracy': accuracy,
+            'precision': precision,
+            'recall': recall,
+            'f1': f1
+        }
 
-                             This example 4 is also not an animal product. The goat in the ad is made out of silver and it's not the animal we are interested.
+    def train_data(self, df, still_unbalenced):
+        early_stopping_callback = EarlyStoppingCallback(patience=5, log_dir="./log")
 
-                             5. Advertisement: HUGE SHARK TOOTH FOSSIL 3&1/4" GREAT Serrations Upper Principal
-                             Label: not a relevant animal
+        tokenized_data, data_collator = self.create_dataset(df, self.test_data)
 
-                             This is a product from a shark, but is not an animal product because it's only one tooth and it's a fossil.
-                             6. Advertisement:
-                             '''
+        # Define training arguments
+        training_args = TrainingArguments(
+            output_dir="results",
+            evaluation_strategy="epoch",
+            save_strategy="epoch",
+            metric_for_best_model="eval_accuracy",
+            per_device_train_batch_size=32,
+            per_device_eval_batch_size=32,
+            num_train_epochs=20,
+            learning_rate=self.learning_rate,
+            weight_decay=self.weight_decay,
+            save_total_limit=2,
+            save_steps=10,
+            logging_steps=10,
+            push_to_hub=False,
+            logging_dir="./logs",
+            load_best_model_at_end=True
+        )
+        if still_unbalenced:
+            print(f"using modified loss function")
+            # Create a Trainer
+            trainer = MyTrainer(
+                model=self.model,
+                args=training_args,
+                data_collator=data_collator,
+                compute_metrics=BertFineTuner.compute_metrics,
+                train_dataset=tokenized_data["train"],
+                eval_dataset=tokenized_data["val"],
+                callbacks=[early_stopping_callback]
+            )
 
-    def set_model(self):
-        if self.label_model == "llama":
-            checkpoint = "llama/"
-            self.model = AutoModelForCausalLM.from_pretrained(checkpoint).to(self.device)
-            self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-            self.prompt_llama = self.generate_llama_prompt()
-            print("model Loaded")
-        elif self.label_model == "gpt":
-            self.model = OpenAI(api_key="xxxxxx")
-        elif self.label_model =="file":
-            self.model = None
+            # Fine-tune the model
+            trainer.train()
+            results = trainer.evaluate()
+            print(results)
 
+            self.trainer = trainer
 
-    def predict_animal_product(self, row):
-        label = Labeling.check_already_label(row) ## for test if you have data labeled
-        if label:
-            return label
-        if self.label_model == "llama":
-            return self.get_llama_label(row)
-        elif self.label_model == "gpt":
-            return self.get_gpt_label(row)
-        elif self.label_model == "file":
-            return self.get_file_label(row)
+            return results, self.trainer
         else:
-            raise ValueError("No model selected")
+            # Create a Trainer
+            trainer = Trainer(
+                model=self.model,
+                args=training_args,
+                data_collator=data_collator,
+                compute_metrics=BertFineTuner.compute_metrics,
+                train_dataset=tokenized_data["train"],
+                eval_dataset=tokenized_data["val"],
+                callbacks=[early_stopping_callback]
+            )
+
+            # Fine-tune the model
+            trainer.train()
+            results = trainer.evaluate()
+            print(results)
+
+            self.trainer = trainer
+
+            return results, self.trainer
 
 
-    def generate_inference_data(self, data, column):
-        def truncate_string(s, max_length=2000):  # Adjust max_length as needed
-            return s[:max_length] + '...' if len(s) > max_length else s
+    def get_inference(self, df: pd.DataFrame) -> torch.Tensor:
+        predicted_labels = []
+        chunk_size = 10000
+        total_records = len(df)
+        start_index = 0
 
-        if self.label_model != "file":
-            examples = []
-            for _, data_point in data.iterrows():
-                examples.append(
-                {
-                    "id": data_point["id"],
-                    "title": data_point["title"],
-                    "training_text": data_point["clean_title"],
-                    "text": self.generate_prompt(truncate_string(data_point[column])),
-                }
-                )
-            data = pd.DataFrame(examples)
-        return data
+        while start_index < total_records:
+            end_index = min(start_index + chunk_size, total_records)
+            chunk = df[start_index:end_index]
+            test_dataset = self.create_test_dataset(chunk)
+            # data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
+            # data_loader = DataLoader(test_dataset["test"], batch_size=batch_size, collate_fn=data_collator)
+            predictions = self.trainer.predict(test_dataset["test"])  # Make predictions on the current batch
+            prediction_scores = predictions.predictions
+            batch_predicted_labels = torch.argmax(torch.tensor(prediction_scores), dim=1)
 
+            predicted_labels.append(batch_predicted_labels)
 
-
-    def get_gpt_label(self, row):
-        labels =  pd.read_csv("labaled_by_gpt.csv")
-        id_ = row["id"]
-        prompt = row["text"]
-        if id_ in labels["id"].to_list():
-            return labels.loc[labels["id"] == id_, "label"].values[0]
-        else:
-            response = self.model.chat.completions.create(
-                    model="gpt-4",
-                    messages=[
-                        # {"role": "system", "content": "You are a helpful assistant."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    max_tokens=100,
-                    temperature=0.2,
-                )
-            return response.choices[0].message.content
+            start_index = end_index
 
 
-    def get_llama_label(self, row):
-        text = row["text"]
-        inputs = self.tokenizer(text, return_tensors="pt").to(self.device)
-        inputs_length = len(inputs["input_ids"][0])
-        with torch.inference_mode():
-            outputs = self.model.generate(**inputs, max_new_tokens=256, temperature=0.0001)
-            results = self.tokenizer.decode(outputs[0][inputs_length:], skip_special_tokens=True)
-            try:
-                answer = results.split("Response:\n")[2].split("\n")[0]
-            except Exception:
-                # Handle IndexError separately
-                try:
-                    answer = results.split("Response:\n")[1].split("\n")[0]
-                except Exception:
-                    # Handle any other exception
-                    answer = 'not a relevant animal'
-        return answer
+        # Concatenate the predicted labels from all batches
+        predicted_labels = torch.cat(predicted_labels)
+
+        return predicted_labels
+
+    def save_model(self, path: str):
+        self.trainer.save_model(path)
+
+    def update_model(self, model_name, model_acc, save_model: bool):
+        if save_model:
+            self.save_model(model_name)
+        self.last_model_acc = {model_name: model_acc}
+        self.model = BertForSequenceClassification.from_pretrained(model_name, num_labels=2)
+        self.base_model = model_name
 
 
-    def get_file_label(self, row):
-        raise NotImplementedError()
+class MyTrainer(Trainer):
+    def __init__(self,
+            model: Union[PreTrainedModel, nn.Module] = None,
+            args: TrainingArguments = None,
+            data_collator: Optional[Any] = None,
+            train_dataset: Optional[Union[Dataset, IterableDataset, "datasets.Dataset"]] = None,
+            eval_dataset: Optional[Union[Dataset, Dict[str, Dataset], "datasets.Dataset"]] = None,
+            tokenizer: Optional[PreTrainedTokenizerBase] = None,
+            model_init: Optional[Callable[[Any], PreTrainedModel]] = None,
+            compute_metrics: Optional[Callable[[Any], Dict]] = None,
+            callbacks: Optional[List[Any]] = None,
+            optimizers: Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR] = (None, None),
+            preprocess_logits_for_metrics: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None):
+        super().__init__(model, args, data_collator, train_dataset, eval_dataset, tokenizer, model_init, compute_metrics, callbacks, optimizers, preprocess_logits_for_metrics)
 
-    @staticmethod
-    def check_already_label(row):
-        return None
-        # labeled_data = pd.read_csv("all_labeled_data_gpt.csv")
-        # if row["id"] in labeled_data["id"].values:
-        #     # Retrieve the label for the corresponding id
-        #     print("data already labeled")
-        #     label = labeled_data.loc[labeled_data["id"] == row["id"], "label"].values[0]
-        #     return label
-        # else:
-        #     return None
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.pop("labels")
+
+        # forward pass
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+        loss_fct = nn.CrossEntropyLoss(weight=torch.tensor([0.2, 0.8], device=model.device))
+        loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
+        return (loss, outputs) if return_outputs else loss
+
+
+
+from transformers import TrainerCallback, Trainer
+
+class EarlyStoppingCallback(TrainerCallback):
+    def __init__(self, patience=5, log_dir=None):
+        self.patience = patience
+        self.best_loss = float('inf')
+        self.wait = 0
+        self.log_dir = log_dir
+
+    def on_epoch_end(self, args, state, control, model=None, **kwargs):
+        if state.is_world_process_zero and state.log_history:
+            current_loss = None
+            for log_entry in reversed(state.log_history):
+                if 'eval_loss' in log_entry:
+                    current_loss = log_entry['eval_loss']
+            if current_loss is not None:  # Check if loss is available in log history
+                if current_loss < self.best_loss:
+                    self.best_loss = current_loss
+                    self.wait = 0
+                else:
+                    self.wait += 1
+                    if self.wait >= self.patience:
+                        control.should_training_stop = True
+                # Save logs
+                if self.log_dir:
+                    with open(f"{self.log_dir}/epoch_{state.epoch}.txt", "w") as f:
+                        for log in state.log_history:
+                            f.write(f"{log}\n")
