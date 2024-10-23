@@ -3,8 +3,7 @@ from typing import Any, Optional, Dict, Union, Tuple, Callable, List
 from transformers import Trainer, TrainingArguments, BertTokenizer
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from datasets import Dataset, DatasetDict
-from transformers import Trainer, PreTrainedTokenizerBase, TrainingArguments, DataCollatorWithPadding, AutoTokenizer, BertForSequenceClassification, DataCollator, PreTrainedModel, default_data_collator
-from torch.utils.data import DataLoader
+from transformers import Trainer, PreTrainedTokenizerBase, TrainingArguments, DataCollatorWithPadding, BertForSequenceClassification, PreTrainedModel
 import torch
 from torch.utils.data import IterableDataset
 import pandas as pd

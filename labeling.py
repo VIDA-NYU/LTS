@@ -1,19 +1,12 @@
 import pandas as pd
-import json
-import re
 from pprint import pprint
-
 import torch
-from datasets import Dataset, DatasetDict
 
-from peft import LoraConfig, PeftModel
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
 )
-import openai
 from openai import OpenAI
-import os
 import pandas as pd
 
 
@@ -120,7 +113,7 @@ class Labeling:
             self.prompt_llama = self.generate_llama_prompt()
             print("model Loaded")
         elif self.label_model == "gpt":
-            self.model = OpenAI(api_key="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")
+            self.model = OpenAI(api_key="xxxxx")
         elif self.label_model =="file":
             self.model = None
 

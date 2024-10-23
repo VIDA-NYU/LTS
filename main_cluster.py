@@ -3,17 +3,11 @@ import pandas as pd
 import numpy as np
 from labeling import Labeling
 from random_sampling import RandomSampler
-from multimodel import MultiModel
 from preprocessing import TextPreprocessor
-# from text_embedding import BertTextEmbedder
-# from text_cluster import TextClusterer
 from fine_tune import BertFineTuner
 from thompson_sampling import ThompsonSampler
-from transformers import BertForSequenceClassification
 import nltk
 import json
-import logging
-# nltk.data.path.append("/Users/julesbarbosa/nltk_data")
 nltk.download('punkt')
 
 import os
