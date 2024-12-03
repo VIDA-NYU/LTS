@@ -1,4 +1,4 @@
-# Sampling Based Methods for Inner Product Sketching
+# Sampling Methods
 
 This is the code for the paper "A Cost-Effective LLM-based Approach to Identify Wildlife
 Trafficking in Online Marketplaces" submitted to VLDB 2024.
