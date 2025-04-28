@@ -1,7 +1,7 @@
 # Sampling Methods
 
 This is the code for the paper "A Cost-Effective LLM-based Approach to Identify Wildlife
-Trafficking in Online Marketplaces" submitted to VLDB 2024.
+Trafficking in Online Marketplaces", accepted to SIGMOD 2025.
 
 
 ## Contents
@@ -45,7 +45,7 @@ You can install the dependencies using `pip`:
 ```
 pip install -r requirements.txt
 ```
-### 🔥 2.3 Lalebing options
+### 🔥 2.3 Labeling options
 
 - You will need to set the open AI key to use gpt4 on labeling.py -labeling parameter gpt.
 
@@ -53,25 +53,24 @@ pip install -r requirements.txt
 
 - For a pre-labeled data you can set -labeling parameter to "file"
 
-## 🔥 3 Following is how to reproduce the experiments needed for each use-case in the paper.
-- Parameters:
-- sample_size -> every iteration is select a sample size
-- filename -> The csv file with the complite collection of data with a title (text) column for labeling
+## 🔥 3 To reproduce the experiments needed for each use-case in the paper, you need to set the following parameters: 
+- sample_size -> the number of samples used in each  iteration  
+- filename -> The csv file with the data (ad collection) with a title (text) column for labeling
 - val_path -> path to the validation data
 - balance -> If you wanna balance the data with undersampling
-- sampling -> the sampling method use. Can choose between thompson sampling, random sampling
+- sampling -> the sampling method to be used <thompson sampling, random sampling>
 - filter_label-> If you wanna filter labels based on positive samples
-- model_finetune-> the model used for finetune in the first iteration
+- model_finetune-> the model used for finetuning in the first iteration
 - labeling -> where the labels are coming from: GPT, LLAMA, FILE
-- model -> choose between text only or multi-modal model
-- metric -> The type of metric to be used for baseline, f1, accuracy, recall, precision
+- model -> choose between <text only,multi-modal>  
+- metric -> The metric used for the baseline, f1, accuracy, recall, precision
 - baseline -> The initial baseline score for the metric
 - cluster_size -> The size of the cluster
 
-#### 3.1 leather Products
+#### 3.1 Leather Products
 
 run: python main_cluster.py -sample_size 200 -filename "data_use_cases/data_leather" -val_path "data/leather_validation.csv" -balance False -sampling "gpt" -filter_label True -model_finetune "bert-base-uncased" -labeling "gpt" -model "text" -baseline 0.5 -metric "f1" -cluster_size "10"
 
-#### 3.2 SHARKS
+#### 3.2 Shark Products
 run: python main_cluster.py -sample_size 200 -filename "data_use_cases/shark_trophy" -val_path "data_use_cases/validation_sharks.csv"  -balance True -sampling thompson -filter_label True -model_finetune "bert-base-uncased" -labeling "gpt" -m -model "text" -baseline 0.5 -metric "f1 -cluster_size "5"
 
