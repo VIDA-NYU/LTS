@@ -42,6 +42,9 @@ pip install -r requirements.txt
 🧪 Use Cases & Reproduction
 To reproduce experiments from the paper, run main_cluster.py with the appropriate flags:
 
+The data needed to run all experiments can be found on:
+https://drive.google.com/drive/folders/1UO4OYjBmvgKcFz71YeB1kefXqQhMvXGA?usp=sharing
+
 🔧 Required Parameters:
 
 - -sample_size: Number of samples per iteration.
@@ -102,6 +105,23 @@ python main_cluster.py \
   -baseline 0.5 \
   -metric "f1" \
   -cluster_size 5
+```
+
+Use Case 3: Animal Products
+```bash
+python main_cluster.py \
+  -sample_size 200 \
+  -filename "data_use_cases/animals" \
+  -val_path "data_use_cases/validation_animals.csv" \
+  -balance True \
+  -sampling "thompson" \
+  -filter_label True \
+  -model_finetune "bert-base-uncased" \
+  -labeling "gpt" \
+  -model "text" \
+  -baseline 0.5 \
+  -metric "f1" \
+  -cluster_size 10
 ```
 
 📫 Contact
