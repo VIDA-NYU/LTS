@@ -1,76 +1,109 @@
-# Sampling Methods
+# 🐾 Wildlife Trafficking Detection
 
-This is the code for the paper "A Cost-Effective LLM-based Approach to Identify Wildlife
-Trafficking in Online Marketplaces", accepted to SIGMOD 2025.
+This repository contains the code used in the paper:
+
+> **"A Cost-Effective LLM-based Approach to Identify Wildlife Trafficking in Online Marketplaces"**
+> Accepted at **SIGMOD 2025**
+
+---
+
+## 📚 Table of Contents
+
+1. [Requirements](#-requirements)
+2. [Setup](#-setup)
+3. [Use Cases & Reproduction](#-use-cases--reproduction)
+
+---
+
+## 📦 Requirements
+
+Experiments were conducted using **Python 3.12.7**. All required dependencies are listed in `requirements.txt` and can be installed via pip.
 
 
-## Contents
+---
 
-This README file is divided into the following sections:
+## ⚙️ Setup
 
-* [1. Requirements](#-1-requirements)
-* [2. Setup ](#-2-setup)
-* [3. Use-cases ](#-3-use-cases)
+### 1. Create a Virtual Environment (Recommended)
 
+Use a virtual environment to avoid dependency conflicts:
 
-
-## 🚀 1. Requirements
-The paper experiments were run using `Python 3.12.7` with the following required packages. They are also listed in the `requirements.txt` file.
-- datasets==2.11.0
-- gensim==4.3.2
-- nltk==3.8.1
-- numpy==1.24.2
-- openai==1.51.2
-- pandas==2.0.0
-- peft==0.10.0
-- Pillow==10.4.0
-- scikit_learn==1.2.2
-- scipy==1.14.1
-- torch==2.2.0
-- torchvision==0.17.0
-- transformers==4.39.0
-
-## 🔥 2 SETUP
-### 2.1 Create a virtual environment (optional, but recommended)
-
-To isolate dependencies and avoid library conflicts with your local environment, you may want to use a Python virtual environment manager. To do so, you should run the following commands to create and activate the virtual environment:
 ```bash
-python -m venv ./venv
-source ./venv/bin/activate
+python -m venv venv
+source venv/bin/activate  # For Unix/macOS
+venv\Scripts\activate     # For Windows
 ```
 
-### 🔥 2.2 Make sure you have the required packages installed
-
-You can install the dependencies using `pip`:
-```
+### 2. Install dependencies
+```bash
 pip install -r requirements.txt
 ```
-### 🔥 2.3 Labeling options
 
-- You will need to set the open AI key to use gpt4 on labeling.py -labeling parameter gpt.
+🧪 Use Cases & Reproduction
+To reproduce experiments from the paper, run main_cluster.py with the appropriate flags:
 
-- To use LLAMA you can add the path to LLAMA model on labeling.py with -labeling parameter llama.
+🔧 Required Parameters:
 
-- For a pre-labeled data you can set -labeling parameter to "file"
+- -sample_size: Number of samples per iteration.
 
-## 🔥 3 To reproduce the experiments needed for each use-case in the paper, you need to set the following parameters: 
-- sample_size -> the number of samples used in each  iteration  
-- filename -> The csv file with the data (ad collection) with a title (text) column for labeling
-- val_path -> path to the validation data
-- balance -> If you wanna balance the data with undersampling
-- sampling -> the sampling method to be used <thompson sampling, random sampling>
-- filter_label-> If you wanna filter labels based on positive samples
-- model_finetune-> the model used for finetuning in the first iteration
-- labeling -> where the labels are coming from: GPT, LLAMA, FILE
-- model -> choose between <text only,multi-modal>  
-- metric -> The metric used for the baseline, f1, accuracy, recall, precision
-- baseline -> The initial baseline score for the metric
-- cluster_size -> The size of the cluster
+- -filename: Path to the dataset CSV file. Must contain a text column named 'title'.
 
-#### 3.1 Leather Products
+- -val_path: Path to the validation dataset.
 
-run: python main_cluster.py -sample_size 200 -filename "data_use_cases/data_leather" -val_path "data/leather_validation.csv" -balance False -sampling "gpt" -filter_label True -model_finetune "bert-base-uncased" -labeling "gpt" -model "text" -baseline 0.5 -metric "f1" -cluster_size "10"
+- -balance: Whether to balance the dataset via undersampling (bool).
 
-#### 3.2 Shark Products
-run: python main_cluster.py -sample_size 200 -filename "data_use_cases/shark_trophy" -val_path "data_use_cases/validation_sharks.csv"  -balance True -sampling thompson -filter_label True -model_finetune "bert-base-uncased" -labeling "gpt" -m -model "text" -baseline 0.5 -metric "f1 -cluster_size "5"
+- -sampling: Sampling strategy (string: "thompson" or "random").
+
+- -filter_label: Whether to filter out negative samples. (bool)
+
+- -model_finetune: Model name for fine-tuning in the first iteration (string: e.g., "bert-base-uncased").
+
+- -labeling: Source of labels (string: gpt, llama, or file).
+
+- -model: Choose model type (string: text, multi-modal).
+
+- -metric: Evaluation metric used to compare models between iterations (string: "f1", "accuracy", "recall", "precision").
+
+- -baseline: Initial baseline metric score for first iteration.
+
+- -cluster_size: Number of clusters to use.
+
+
+
+👜 Use Case 1: Leather Products
+```bash
+python main_cluster.py \
+  -sample_size 200 \
+  -filename "data_use_cases/data_leather" \
+  -val_path "data/leather_validation.csv" \
+  -balance False \
+  -sampling "thompson" \
+  -filter_label True \
+  -model_finetune "bert-base-uncased" \
+  -labeling "gpt" \
+  -model "text" \
+  -baseline 0.5 \
+  -metric "f1" \
+  -cluster_size 10
+```
+
+🦈 Use Case 2: Shark Products
+```bash
+python main_cluster.py \
+  -sample_size 200 \
+  -filename "data_use_cases/shark_trophy" \
+  -val_path "data_use_cases/validation_sharks.csv" \
+  -balance True \
+  -sampling "thompson" \
+  -filter_label True \
+  -model_finetune "bert-base-uncased" \
+  -labeling "gpt" \
+  -model "text" \
+  -baseline 0.5 \
+  -metric "f1" \
+  -cluster_size 5
+```
+
+📫 Contact
+For questions or feedback, please open an issue or reach out via the contact information provided in the paper.
 
